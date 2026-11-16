@@ -1,0 +1,5 @@
+# The web versions used by Hermes v0.23.2, plus its existing HTTP test client.
+fastapi==0.133.1
+starlette==1.9.0
+httpx==0.28.1
+PyYAML>=6.0,<7

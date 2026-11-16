@@ -1,0 +1,9 @@
+name: agent-companion
+version: "0.1.0"
+manifest_version: 2
+description: "Portable connection metadata and explicit agent roles for the Agent client."
+author: Red Hills Media
+license: MIT
+requires_hermes: ">=0.23.2"
+provides_tools: []
+provides_hooks: []
