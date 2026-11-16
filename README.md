@@ -6,10 +6,10 @@ The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and
 
 ## Install
 
-The public repository and release commit must be confirmed before these placeholders become an install command. Replace `OWNER/REPO` and `FULL_COMMIT_SHA` with the published source and its complete immutable 40-character commit:
+Install the reviewed release from [RedHillsMediaFL/agent-hermes-plugin](https://github.com/RedHillsMediaFL/agent-hermes-plugin). The [release page](https://github.com/RedHillsMediaFL/agent-hermes-plugin/releases/tag/v0.1.0) records its full commit for installations that require an immutable commit pin:
 
 ```sh
-hermes plugins install OWNER/REPO --ref FULL_COMMIT_SHA
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref v0.1.0
 hermes plugins enable agent-companion
 hermes plugins doctor agent-companion --ci
 hermes plugins show agent-companion
@@ -20,7 +20,7 @@ Run these commands in the Hermes profile that serves the connection. The normal 
 For an unpinned installation, `hermes plugins update agent-companion` follows its installed source. A pinned installation remains on its selected revision; update it explicitly:
 
 ```sh
-hermes plugins install OWNER/REPO --force --ref NEW_FULL_COMMIT_SHA
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --force --ref NEW_FULL_COMMIT_SHA
 hermes plugins doctor agent-companion --ci
 ```
 

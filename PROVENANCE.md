@@ -21,4 +21,4 @@ There is **no `hermes dashboard --standalone` option** in the reviewed v0.23.2 p
 
 ## Publication boundary
 
-The proposed public GitHub destination must be confirmed before publication. Publish only this package's reviewed tracked files. Do not copy ignored review caches, internal rollout records, signing material, service credentials, private runtime state, or the application's unrelated repository history into it. Re-run secret and standard Hermes plugin validation on the exact release commit.
+The public source destination is [RedHillsMediaFL/agent-hermes-plugin](https://github.com/RedHillsMediaFL/agent-hermes-plugin). Publish only this package's reviewed tracked files. Do not copy ignored review caches, internal rollout records, signing material, service credentials, private runtime state, or the application's unrelated repository history into it. Re-run secret and standard Hermes plugin validation on the exact release commit.
