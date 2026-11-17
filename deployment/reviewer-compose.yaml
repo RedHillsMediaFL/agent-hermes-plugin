@@ -1,0 +1,90 @@
+services:
+  hermes:
+    image: ${AGENT_BETA_IMAGE:?A reviewed immutable compatibility image is required}
+    container_name: agent-beta-hermes
+    user: "992:978"
+    entrypoint: ["/opt/hermes/bin/hermes"]
+    command: ["serve", "--isolated", "--host", "0.0.0.0", "--port", "9119"]
+    init: true
+    read_only: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 1.5
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_TELEMETRY_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      GIT_TEMPLATE_DIR: /opt/reviewer/git-template
+      GIT_ALLOW_PROTOCOL: file
+    volumes:
+      - /var/lib/agent-beta/hermes:/opt/data:rw
+      - /opt/agent-beta/git-mirror/companion.git:/opt/reviewer/companion.git:ro
+      - /opt/agent-beta/git-template:/opt/reviewer/git-template:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m
+    dns: ["127.0.0.1"]
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+    networks:
+      reviewer_internal:
+        ipv4_address: 172.29.244.2
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+  provider:
+    image: ${AGENT_BETA_PROVIDER_IMAGE:?A reviewed immutable provider proxy image is required}
+    container_name: agent-beta-provider
+    user: "993:993"
+    init: true
+    read_only: true
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 48
+    mem_limit: 256m
+    cpus: 0.5
+    environment:
+      REVIEW_PROXY_PORT: "3010"
+      REVIEW_PROXY_STATE: /state
+      REVIEW_PROVIDER_KEY_FILE: /run/secrets/provider-key
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - /var/lib/agent-beta/provider-state:/state:rw
+      - /var/lib/agent-beta/provider-secret:/run/secrets/provider-key:ro
+      - /opt/agent-beta/empty-provider-data:/opt/data:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=16m
+    dns: ["127.0.0.1"]
+    extra_hosts:
+      - "api.deepseek.com:3.173.21.63"
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+      net.ipv4.ip_forward: "0"
+    networks:
+      reviewer_internal:
+        ipv4_address: 172.29.244.3
+      provider_egress:
+        ipv4_address: 172.29.244.18
+        gw_priority: 1
+    logging:
+      driver: json-file
+      options: {max-size: "1m", max-file: "2"}
+networks:
+  reviewer_internal:
+    name: agent-beta-internal
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: br-agent-beta-i
+    ipam:
+      config: [{subnet: 172.29.244.0/28}]
+  provider_egress:
+    name: agent-beta-egress
+    driver_opts:
+      com.docker.network.bridge.name: br-agent-beta-e
+    ipam:
+      config: [{subnet: 172.29.244.16/28}]

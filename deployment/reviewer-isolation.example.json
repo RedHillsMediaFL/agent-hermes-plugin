@@ -1,0 +1,11 @@
+{
+  "internal_subnet": "172.29.244.0/28",
+  "egress_subnet": "172.29.244.16/28",
+  "internal_bridge": "br-agent-beta-i",
+  "host_gateway": "172.29.244.1",
+  "hermes_ip": "172.29.244.2",
+  "provider_internal_ip": "172.29.244.3",
+  "provider_egress_ip": "172.29.244.18",
+  "provider_port": 3010,
+  "upstream_ipv4": ["3.173.21.63"]
+}
