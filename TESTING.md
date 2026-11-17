@@ -14,7 +14,7 @@ Use a standard Hermes installation with supported web dependencies. Agent suppor
 ## Install through Hermes
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref REVIEWED_FULL_COMPANION_COMMIT_SHA
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref f954aaa7109aefb070c92559ef546edd85000dcb
 hermes plugins enable agent-companion-runtime
 hermes plugins doctor agent-companion-runtime --ci
 hermes plugins show agent-companion-runtime
