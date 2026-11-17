@@ -4,7 +4,7 @@ A free MIT-licensed Hermes plugin that supplies optional connection labels, expl
 
 It also serves the operator's named AI-recipient declaration for Agent's explicit sharing-permission flow. Agent requires a complete declaration before sending AI requests; an absent declaration leaves sign-in, history and settings available while AI sends require server setup.
 
-The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and hosted dashboard HTTP execution. Version 0.2 reports the reviewed Hermes compatibility release recorded in `dashboard/runtime_target.json` and the prerequisites for connecting to it. The published v0.1.0 metadata preview remains separate and unchanged. Installing a plugin alone never attests chat compatibility.
+The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and hosted dashboard HTTP execution. Version 0.3 reports the reviewed Hermes compatibility release recorded in `dashboard/runtime_target.json` and the prerequisites for connecting to it. The published v0.1.0 metadata preview remains separate and unchanged. Installing a plugin alone never attests chat compatibility.
 
 ## Install
 
@@ -78,6 +78,15 @@ Successful changes increment `revision`; an identical save is idempotent. A stal
 
 The server operator supplies exact profile names and the actual organizations or operators that receive data. A complete declaration covers every enabled AI route for that profile: its main provider, fallbacks, auxiliary work such as titles and compression, transcription, and AI services used by tools, actions or automation. A model brand alone is insufficient. Include the hosting operator and known downstream processors; retain `opaque:true` whenever any downstream recipient remains unknown.
 
+Configure this locally using Hermes' normal plugin CLI, in the profile serving the connection:
+
+```sh
+hermes agent-sharing show
+hermes agent-sharing set --file policy.json --expected-revision 0
+```
+
+Use the current `policy_revision` from `show`, rather than assuming zero. The UTF-8 file contains only the `policy` object shown below: `schema_version` and `profiles`, without the HTTP `expected_revision` envelope. The local command validates the same closed schema, byte limit and compare-and-swap rules as the API. It uses the effective Hermes profile's supported plugin storage, without network access, a running gateway, another service, or provider changes. Run it as the local Hermes operator; for a managed container, use that container's normal local execution mechanism. It never grants user sharing permission. This path also works for isolated `hermes serve` installations, which do not expose the native gateway owner-ticket channel.
+
 Read `/ai-sharing/policy`, then replace it with the returned `policy_revision` as `expected_revision`. The closed request shape is:
 
 ```json
@@ -105,7 +114,7 @@ Read `/ai-sharing/policy`, then replace it with the returned `policy_revision` a
 
 Replace the example names and origins with the actual recipients. `manual_ai` describes user-requested chat, replies, tasks, voice, drafting and actions. `automatic_personal_context` describes automatic sharing of selected personal records; the client obtains separate permission for that purpose. A recipient can declare either purpose or both. The policy itself grants no user permission.
 
-Policy writes use Hermes' existing private, same-user native HTTP owner channel. The middleware must supply a `native-http` grant with its exact `http:owner` capability. Ordinary authenticated sessions and hosted authentication can read the policy but cannot edit it. Caller-supplied headers, profile names and request bodies cannot manufacture operator authority. On hosted installations, configure the declaration through the hosting operator's local owner channel in the effective Hermes profile.
+HTTP policy writes use Hermes' existing private, same-user native HTTP owner channel where that runtime supplies it. The middleware must supply a `native-http` grant with its exact `http:owner` capability. Ordinary authenticated sessions and hosted authentication can read the policy but cannot edit it. Caller-supplied headers, profile names and request bodies cannot manufacture operator authority. Otherwise use the local `hermes agent-sharing` command in the effective Hermes profile.
 
 The policy lives in `companion_ai_sharing_policy`, a separate table in the plugin's existing profile-resolved SQLite database. Saves use compare-and-swap: an identical policy keeps its revision; a stale save returns HTTP 409 with `detail.code: ai_sharing_policy_revision_conflict` and the current receipt. Corrupt or unreadable records return 503 and are preserved. Policy JSON is capped at 64 KiB, with a 1 KiB allowance for the update envelope; at most 64 profiles, 64 recipients per profile, 256 recipients overall, 16 origins per recipient and 1,024 origins overall are accepted. Processor names fit both the 128-character server limit and the native client's 160-byte UTF-8 limit. Origins contain no credentials, query strings, fragments or paths.
 
