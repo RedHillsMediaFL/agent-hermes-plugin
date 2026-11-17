@@ -1,5 +1,5 @@
 name: agent-companion-runtime
-version: "0.3.1"
+version: "0.3.2"
 manifest_version: 2
 description: "Portable connection metadata and explicit agent roles for the Agent client."
 author: Red Hills Media

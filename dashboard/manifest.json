@@ -3,7 +3,7 @@
   "label": "Agent Companion",
   "description": "Connection metadata and explicit profile roles for Agent.",
   "icon": "MessageSquare",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "tab": {"hidden": true},
   "api": "plugin_api.py"
 }
