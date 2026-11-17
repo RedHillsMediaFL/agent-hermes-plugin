@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Bounded publisher-review inference, separate from ordinary self-hosted installs.
 
-Run only on a private container network. The Hermes container receives no provider
-key and has no direct internet route. Prompts and responses are never logged.
+Run only on a private container network. Hermes has no direct inference or
+internet route. Only the startup-configured local model is used. Prompts and
+responses are never logged.
 """
 import datetime
 from contextlib import closing
 import http.server
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -15,9 +17,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 
-MODEL = "deepseek-chat"
-UPSTREAM = "https://api.deepseek.com/chat/completions"
+MODEL = ""
+UPSTREAM = ""
 MAX_BODY = 131072
 MAX_TEXT = 16000
 MAX_OUTPUT = 256
@@ -25,8 +28,28 @@ DAILY_REQUESTS = 50
 MINUTE_REQUESTS = 5
 MAX_RESPONSE = 2 * 1024 * 1024
 STATE = Path(os.environ.get("REVIEW_PROXY_STATE", "/state"))
-KEY_FILE = Path(os.environ.get("REVIEW_PROVIDER_KEY_FILE", "/run/secrets/provider-key"))
-ACTIVE = threading.BoundedSemaphore(2)
+CONFIG_FILE = Path(os.environ.get("REVIEW_PROVIDER_CONFIG", "/opt/review/provider-config.json"))
+ACTIVE = threading.BoundedSemaphore(1)
+
+
+def configure(value):
+    """Startup-only operator configuration; requests cannot select another target."""
+    if not isinstance(value, dict) or set(value) != {"model", "upstream_url"}:
+        raise ValueError("A fixed local model and upstream URL are required")
+    model, url = value["model"], value["upstream_url"]
+    if not isinstance(model, str) or not 1 <= len(model) <= 128 or not model.isprintable() or any(c.isspace() for c in model):
+        raise ValueError("Invalid local model identifier")
+    if not isinstance(url, str):
+        raise ValueError("Invalid local upstream URL")
+    parsed = urllib.parse.urlsplit(url)
+    address = ipaddress.ip_address(parsed.hostname or "")
+    private_lan = any(address in ipaddress.ip_network(network) for network in ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+    if (parsed.scheme != "http" or address.version != 4 or not private_lan
+            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.path != "/v1/chat/completions" or not parsed.port or not 1024 <= parsed.port <= 65535):
+        raise ValueError("Use one reviewed private IPv4 OpenAI-compatible endpoint")
+    global MODEL, UPSTREAM
+    MODEL, UPSTREAM = model, url
 
 
 class AdmissionError(ValueError):
@@ -57,7 +80,8 @@ def prepare(value):
         raise AdmissionError("Invalid output limit.")
     if type(value.get("stream", False)) is not bool:
         raise AdmissionError("Invalid streaming option.")
-    result = {"model": MODEL, "messages": output, "stream": value.get("stream", False), "max_tokens": min(requested, MAX_OUTPUT)}
+    result = {"model": MODEL, "messages": output, "stream": value.get("stream", False),
+              "max_tokens": min(requested, MAX_OUTPUT), "reasoning_effort": "none"}
     if value.get("response_format") == {"type": "json_object"}:
         result["response_format"] = {"type": "json_object"}
     return result
@@ -139,12 +163,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         started = False
         try:
             admit()
-            key = KEY_FILE.read_text().strip()
-            if not key or "\n" in key:
-                raise OSError("Provider key unavailable")
             request = urllib.request.Request(UPSTREAM, data=json.dumps(body).encode(), method="POST",
-                headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-            with urllib.request.build_opener(NoRedirect()).open(request, timeout=60) as response:
+                headers={"Content-Type": "application/json"})
+            with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(request, timeout=60) as response:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream" if body["stream"] else "application/json")
                 self.send_header("Cache-Control", "no-store")
@@ -162,8 +183,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.fail(429, str(exc))
         except urllib.error.HTTPError as exc:
             if not started:
-                # Preserve non-retryable provider failures (notably an unfunded
-                # account) without forwarding its body, headers, or credentials.
+                # Preserve local admission refusals, including an idle-only
+                # gateway's 409, without forwarding its body or headers.
                 status = exc.code if 400 <= exc.code < 500 else 503
                 exc.close()
                 self.fail(status, "The review provider is unavailable. Try later or connect your own Hermes server.")
@@ -177,6 +198,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.umask(0o077)
+    configure(json.loads(CONFIG_FILE.read_text()))
     class Server(http.server.ThreadingHTTPServer):
         daemon_threads = True
         request_queue_size = 16
@@ -185,4 +207,4 @@ if __name__ == "__main__":
             connection.settimeout(65)
             return connection, address
 
-    Server(("0.0.0.0", int(os.environ.get("REVIEW_PROXY_PORT", "18445"))), Handler).serve_forever()
+    Server(("0.0.0.0", int(os.environ.get("REVIEW_PROXY_PORT", "3010"))), Handler).serve_forever()

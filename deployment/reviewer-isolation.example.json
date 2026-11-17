@@ -7,5 +7,6 @@
   "provider_internal_ip": "172.29.244.3",
   "provider_egress_ip": "172.29.244.18",
   "provider_port": 3010,
-  "upstream_ipv4": ["3.173.21.63"]
+  "upstream_ipv4": ["192.168.1.10"],
+  "upstream_port": 8000
 }

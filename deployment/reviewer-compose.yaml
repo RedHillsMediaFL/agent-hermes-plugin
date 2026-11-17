@@ -20,9 +20,20 @@ services:
       GIT_TEMPLATE_DIR: /opt/reviewer/git-template
       GIT_ALLOW_PROTOCOL: file
     volumes:
-      - /var/lib/agent-beta/hermes:/opt/data:rw
-      - /opt/agent-beta/git-mirror/companion.git:/opt/reviewer/companion.git:ro
-      - /opt/agent-beta/git-template:/opt/reviewer/git-template:ro
+      - type: bind
+        source: /var/lib/agent-beta/hermes
+        target: /opt/data
+        bind: {create_host_path: false}
+      - type: bind
+        source: /opt/agent-beta/git-mirror/companion.git
+        target: /opt/reviewer/companion.git
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: /opt/agent-beta/git-template
+        target: /opt/reviewer/git-template
+        read_only: true
+        bind: {create_host_path: false}
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=128m
     dns: ["127.0.0.1"]
@@ -50,17 +61,26 @@ services:
     environment:
       REVIEW_PROXY_PORT: "3010"
       REVIEW_PROXY_STATE: /state
-      REVIEW_PROVIDER_KEY_FILE: /run/secrets/provider-key
+      REVIEW_PROVIDER_CONFIG: /opt/review/provider-config.json
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
-      - /var/lib/agent-beta/provider-state:/state:rw
-      - /var/lib/agent-beta/provider-secret:/run/secrets/provider-key:ro
-      - /opt/agent-beta/empty-provider-data:/opt/data:ro
+      - type: bind
+        source: /var/lib/agent-beta/provider-state
+        target: /state
+        bind: {create_host_path: false}
+      - type: bind
+        source: /opt/agent-beta/provider-config.json
+        target: /opt/review/provider-config.json
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: /opt/agent-beta/empty-provider-data
+        target: /opt/data
+        read_only: true
+        bind: {create_host_path: false}
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,size=16m
     dns: ["127.0.0.1"]
-    extra_hosts:
-      - "api.deepseek.com:3.173.21.63"
     sysctls:
       net.ipv6.conf.all.disable_ipv6: "1"
       net.ipv6.conf.default.disable_ipv6: "1"
