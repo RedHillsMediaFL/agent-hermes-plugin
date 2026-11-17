@@ -23,6 +23,12 @@ runtime_setup = importlib.util.module_from_spec(_runtime_spec)
 sys.modules[_runtime_name] = runtime_setup
 _runtime_spec.loader.exec_module(runtime_setup)
 
+_sharing_name = "agent_companion_ai_sharing_v1"
+_sharing_spec = importlib.util.spec_from_file_location(_sharing_name, Path(__file__).with_name("ai_sharing.py"))
+ai_sharing = importlib.util.module_from_spec(_sharing_spec)
+sys.modules[_sharing_name] = ai_sharing
+_sharing_spec.loader.exec_module(ai_sharing)
+
 router = APIRouter(tags=["Agent companion"])
 _NO_STORE = {"Cache-Control": "no-store"}
 
@@ -86,6 +92,65 @@ async def read_capabilities(request: Request, response: Response):
     authorize(request)
     response.headers.update(_NO_STORE)
     return state.capabilities()
+
+
+_AI_OPERATIONS = frozenset({"chat", "reply", "task", "transcription", "group", "automation",
+                            "command", "response", "agent_draft", "personal_context"})
+
+
+def _recipient_disclosure(request, profile, session_id, room_id, operation):
+    profile = ai_sharing._scope(profile)
+    if session_id is not None:
+        session_id = ai_sharing._scope(session_id)
+    if room_id is not None:
+        ai_sharing._scope(room_id)
+    if operation not in _AI_OPERATIONS:
+        raise ai_sharing.InvalidDisclosure()
+    try:
+        # This is an explicit compatibility-runtime contract, not a monkeypatch
+        # or an assumption that an installed plugin enforces provider dispatch.
+        from hermes_cli.ai_sharing_policy import read_disclosure
+    except ImportError:
+        result = ai_sharing.build_disclosure({}, profile=profile, session_id=session_id)
+        result["enforced_operations"] = []
+        return result
+    result = read_disclosure(request, profile=profile, session_id=session_id,
+                             room_id=room_id, operation=operation)
+    allowed = {"schema_version", "revision", "complete", "enforced", "profile", "session_id",
+               "recipients", "unavailable_reason", "enforced_operations"}
+    if (type(result) is not dict or set(result) - allowed or result.get("schema_version") != 1
+            or result.get("profile") != profile or result.get("session_id") != session_id
+            or type(result.get("complete")) is not bool or type(result.get("enforced")) is not bool
+            or type(result.get("revision")) is not str
+            or len(result["revision"]) != 64
+            or any(c not in "0123456789abcdef" for c in result["revision"])
+            or type(result.get("enforced_operations")) is not list
+            or any(type(value) is not str for value in result["enforced_operations"])
+            or not set(result["enforced_operations"]) <= _AI_OPERATIONS
+            or len(result["enforced_operations"]) > len(_AI_OPERATIONS)
+            or len(set(result["enforced_operations"])) != len(result["enforced_operations"])
+            or type(result.get("recipients")) is not list or len(result["recipients"]) > 64):
+        raise ai_sharing.InvalidDisclosure()
+    for recipient in result["recipients"]:
+        if (type(recipient) is not dict or set(recipient) != {"id", "name", "origins", "purposes"}
+                or recipient["purposes"] != list(ai_sharing.PURPOSES)):
+            raise ai_sharing.InvalidDisclosure()
+        ai_sharing._recipient({key: recipient[key] for key in ("id", "name", "origins")})
+    if len({value["id"] for value in result["recipients"]}) != len(result["recipients"]):
+        raise ai_sharing.InvalidDisclosure()
+    return result
+
+
+@router.get("/ai-sharing", operation_id="agent_companion_ai_sharing")
+async def read_ai_sharing(request: Request, response: Response, profile: str = "default",
+                          session_id: str | None = None, room_id: str | None = None,
+                          operation: str = "chat"):
+    authorize(request)
+    response.headers.update(_NO_STORE)
+    try:
+        return await run_in_threadpool(_recipient_disclosure, request, profile, session_id, room_id, operation)
+    except ai_sharing.InvalidDisclosure:
+        raise HTTPException(503, {"code": "ai_recipient_disclosure_unavailable"}, headers=_NO_STORE) from None
 
 
 @router.get("/settings", operation_id="agent_companion_settings")
