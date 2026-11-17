@@ -1,10 +1,14 @@
-"""Read-only AI recipient disclosure from an already sanitized configuration snapshot.
+"""AI recipient metadata; the served operator mode never attests runtime enforcement.
+
+``validate_operator_policy`` / ``build_operator_disclosure`` serve the authenticated
+operator's declarations. The legacy configuration builder below remains a static
+draft/inventory helper and is not used by the companion's disclosure endpoint.
 
 No provider resolution, environment reads, credential access or dispatch hooks occur here.
 ``complete`` describes the supplied declarations; ``enforced`` is a separate native-runtime
 attestation and defaults to False. An operator declaration alone cannot enable enforcement.
 
-Operator format::
+Legacy inventory-helper format (not the served operator profiles policy)::
 
     {"schema_version": 1, "routes": {
         "main": {"complete": True, "recipients": [
@@ -34,6 +38,9 @@ _ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 _SCOPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
 _SECRET = re.compile(r"(?:key|token|secret|password|authorization|cookie|credential|headers?|auth)", re.I)
 _AUX_META = frozenset({"transient_retries", "free_only", "openrouter_model", "stream_only_base_urls"})
+MAX_POLICY_BYTES = 65_536
+MAX_POLICY_PROFILES = 64
+_OPERATOR_PROFILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 
 # Public direct API identities only. A local model name is never recipient evidence.
 # Callers can inject audited public registry metadata instead; this module imports no runtime registry.
@@ -53,6 +60,78 @@ PUBLIC_PROVIDERS = {
 
 class InvalidDisclosure(ValueError):
     """Malformed/over-limit input; messages deliberately omit all input values."""
+
+
+def operator_profile(value):
+    """An exact profile name, never a path, alias, wildcard or existence assertion."""
+    _require(type(value) is str and _OPERATOR_PROFILE.fullmatch(value) is not None)
+    return value
+
+
+def operator_session(value):
+    clean = _scope(value)
+    _require(value == clean)
+    return clean
+
+
+def validate_operator_policy(value):
+    """Validate closed metadata, normalize origins and reduce incomplete claims to False."""
+    _require(type(value) is dict and set(value) == {'schema_version', 'profiles'} and
+             type(value['schema_version']) is int and value['schema_version'] == 1)
+    profiles = value['profiles']
+    _require(type(profiles) is dict and len(profiles) <= MAX_POLICY_PROFILES)
+    result, recipient_count, origin_count = {}, 0, 0
+    for profile, entry in profiles.items():
+        operator_profile(profile)
+        _require(type(entry) is dict and set(entry) == {'complete', 'opaque', 'recipients'} and
+                 type(entry['complete']) is bool and type(entry['opaque']) is bool)
+        rows = entry['recipients']
+        _require(type(rows) is list and len(rows) <= MAX_RECIPIENTS)
+        recipient_count += len(rows)
+        _require(recipient_count <= 256)
+        recipients, identifiers = [], set()
+        for row in rows:
+            _require(type(row) is dict and set(row) == {'id', 'name', 'origins', 'purposes'})
+            clean = _recipient({key: row[key] for key in ('id', 'name', 'origins')})
+            purposes = row['purposes']
+            _require(type(purposes) is list and 1 <= len(purposes) <= len(PURPOSES) and
+                     all(type(p) is str and p in PURPOSES for p in purposes) and
+                     len(set(purposes)) == len(purposes) and clean['id'] not in identifiers)
+            identifiers.add(clean['id'])
+            clean['purposes'] = [purpose for purpose in PURPOSES if purpose in purposes]
+            recipients.append(clean)
+            origin_count += len(clean['origins'])
+            _require(origin_count <= 1024)
+        result[profile] = {'complete': bool(entry['complete'] and recipients and not entry['opaque']),
+                           'opaque': entry['opaque'],
+                           'recipients': sorted(recipients, key=lambda r: r['id'])}
+    clean = {'schema_version': 1, 'profiles': result}
+    _require(len(json.dumps(clean, ensure_ascii=False, separators=(',', ':')).encode()) <= MAX_POLICY_BYTES)
+    return clean
+
+
+def build_operator_disclosure(policy, *, profile, session_id=None):
+    """Return declared profile metadata; session is only an echoed fingerprint scope."""
+    clean = validate_operator_policy(policy)
+    profile = operator_profile(profile)
+    if session_id is not None:
+        session_id = operator_session(session_id)
+    entry = clean['profiles'].get(profile)
+    output = {'schema_version': 1, 'source': 'operator_declared', 'profile': profile,
+              'complete': bool(entry and entry['complete']),
+              'recipients': entry['recipients'] if entry else []}
+    if session_id is not None:
+        output['session_id'] = session_id
+    material = {**output, 'profile_declaration': entry}
+    output['revision'] = hashlib.sha256(json.dumps(material, sort_keys=True, separators=(',', ':'),
+                                                 ensure_ascii=True).encode()).hexdigest()
+    if entry is None:
+        output['unavailable_reason'] = 'This server has not declared AI processors for this profile.'
+    elif entry['opaque']:
+        output['unavailable_reason'] = 'The operator has not identified every downstream AI processor.'
+    elif not output['complete']:
+        output['unavailable_reason'] = "The operator's AI processor declaration is incomplete."
+    return output
 
 
 def _require(value):

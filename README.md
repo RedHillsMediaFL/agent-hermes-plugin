@@ -2,6 +2,8 @@
 
 A free MIT-licensed Hermes plugin that supplies optional connection labels, explicit agent roles, and interface preferences for the Agent client. It uses Hermes' normal plugin manager, dashboard API, and profile-resolved plugin storage. It registers no model tools or hooks and requires no relay.
 
+It also serves the operator's named AI-recipient declaration for Agent's explicit sharing-permission flow. Agent requires a complete declaration before sending AI requests; an absent declaration leaves sign-in, history and settings available while AI sends require server setup.
+
 The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and hosted dashboard HTTP execution. Version 0.2 reports the reviewed Hermes compatibility release recorded in `dashboard/runtime_target.json` and the prerequisites for connecting to it. The published v0.1.0 metadata preview remains separate and unchanged. Installing a plugin alone never attests chat compatibility.
 
 ## Install
@@ -45,6 +47,9 @@ The dashboard mounts all routes beneath **`/api/plugins/agent-companion-runtime`
 | DELETE | `/settings?expected_revision=N` | Reset display settings to defaults without rotating installation identity or touching chat data. |
 | GET | `/setup/runtime` | Read-only reviewed source target and explicit initial-install/restart/managed-host requirements. |
 | POST | `/setup/runtime` | Refuse automatic source replacement with a bounded prerequisite code; no runtime or source changes. |
+| GET | `/ai-sharing?profile=NAME&session_id=ID` | Current operator-declared AI recipients for the exact profile; `session_id` is optional echoed client scope. |
+| GET | `/ai-sharing/policy` | Current operator policy and its revision; first access creates an empty, incomplete policy. |
+| PUT | `/ai-sharing/policy` | Replace the policy with an exact `expected_revision`; requires Hermes' verified local owner admission. |
 
 Settings are scoped to the **effective Hermes profile**, shared by authenticated dashboard operators of that installation. This is not a multi-tenant account-preference service. Neither a display label nor a profile identifier grants authority or proves that a profile exists. The client must reconcile role metadata with Hermes' actual roster and handle stale/deleted identifiers.
 
@@ -68,6 +73,45 @@ Example successful read:
 PUT accepts exactly `{"expected_revision":0,"settings":<the complete settings object>}`. All fields shown in `settings` are required; unknown fields, duplicate JSON keys, type coercions, control characters, invalid profile IDs and overlapping roles are rejected. The connection label accepts null or 1–80 trimmed characters. Profile IDs retain case and match `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; at most 64 distinct background profiles are allowed. No profile is hidden or made primary automatically. The default destination is `agents` or `chats`.
 
 Successful changes increment `revision`; an identical save is idempotent. A stale revision returns HTTP 409 with `detail.code: settings_revision_conflict` and the current receipt. Reload and let the user reconcile it; do not silently overwrite another save. Invalid JSON/settings returns 400, oversized bodies 413, unauthenticated access 401, and unreadable/corrupt storage 503. Request bodies are capped at 16 KiB; errors do not echo arbitrary submitted values. Responses use `Cache-Control: no-store`.
+
+## AI recipient policy
+
+The server operator supplies exact profile names and the actual organizations or operators that receive data. A complete declaration covers every enabled AI route for that profile: its main provider, fallbacks, auxiliary work such as titles and compression, transcription, and AI services used by tools, actions or automation. A model brand alone is insufficient. Include the hosting operator and known downstream processors; retain `opaque:true` whenever any downstream recipient remains unknown.
+
+Read `/ai-sharing/policy`, then replace it with the returned `policy_revision` as `expected_revision`. The closed request shape is:
+
+```json
+{
+  "expected_revision": 0,
+  "policy": {
+    "schema_version": 1,
+    "profiles": {
+      "assistant": {
+        "complete": true,
+        "opaque": false,
+        "recipients": [
+          {
+            "id": "example-hosting",
+            "name": "Example Hosting LLC",
+            "origins": ["https://ai.example.com"],
+            "purposes": ["manual_ai", "automatic_personal_context"]
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Replace the example names and origins with the actual recipients. `manual_ai` describes user-requested chat, replies, tasks, voice, drafting and actions. `automatic_personal_context` describes automatic sharing of selected personal records; the client obtains separate permission for that purpose. A recipient can declare either purpose or both. The policy itself grants no user permission.
+
+Policy writes use Hermes' existing private, same-user native HTTP owner channel. The middleware must supply a `native-http` grant with its exact `http:owner` capability. Ordinary authenticated sessions and hosted authentication can read the policy but cannot edit it. Caller-supplied headers, profile names and request bodies cannot manufacture operator authority. On hosted installations, configure the declaration through the hosting operator's local owner channel in the effective Hermes profile.
+
+The policy lives in `companion_ai_sharing_policy`, a separate table in the plugin's existing profile-resolved SQLite database. Saves use compare-and-swap: an identical policy keeps its revision; a stale save returns HTTP 409 with `detail.code: ai_sharing_policy_revision_conflict` and the current receipt. Corrupt or unreadable records return 503 and are preserved. Policy JSON is capped at 64 KiB, with a 1 KiB allowance for the update envelope; at most 64 profiles, 64 recipients per profile, 256 recipients overall, 16 origins per recipient and 1,024 origins overall are accepted. Origins contain no credentials, query strings, fragments or paths.
+
+`GET /ai-sharing` returns `source:operator_declared`, a content revision, exact profile scope, named recipients and `complete`. Missing profiles, empty recipient lists, an incomplete declaration or `opaque:true` produce `complete:false`. Profile names match exactly; there are no wildcard or default-profile fallbacks. The optional session identity is echoed for the client's scope checks and makes no claim about session ownership or existence.
+
+The native client obtains explicit permission, preserves drafts when permission is absent, and refreshes this metadata before transfers. Its normal HTTP and RPC messages retain their existing formats. Downstream routing remains the server operator's responsibility and can change after a client preflight. This metadata service makes no atomic runtime-enforcement claim and never changes providers, credentials, defaults, or running jobs.
 
 ## Initial compatible Hermes installation
 
@@ -103,7 +147,7 @@ hermes plugins validate /path/to/agent-hermes-plugin --json
 hermes plugins doctor /path/to/agent-hermes-plugin --ci
 ```
 
-Tests use temporary plugin storage, synthetic authentication, and in-memory ASGI requests. They do not call a model, start a listening server, or use a production Hermes home. They cover concurrent/stale writes, profile storage selection, corruption preservation, strict inputs, authentication before parsing/storage, unsupported capabilities, fail-closed setup refusal and source-target separation. These tests do not establish a successful live server installation or app connection; the exact release still requires isolated HTTP/WebSocket and state-preservation acceptance.
+Tests use temporary plugin storage, synthetic authentication, and in-memory ASGI requests. They do not call a model, start a listening server, or use a production Hermes home. They cover concurrent/stale writes, profile storage selection, corruption preservation, strict inputs, authentication before parsing/storage, operator-only policy writes, incomplete and opaque recipient declarations, unsupported capabilities, fail-closed setup refusal and source-target separation. These tests do not establish a successful live server installation or app connection; the exact release still requires isolated HTTP/WebSocket and state-preservation acceptance.
 
 See [PROVENANCE.md](PROVENANCE.md) for the inspected upstream version and source boundaries. Package tests do not establish a complete Agent app sign-in/create/send/history acceptance result.
 

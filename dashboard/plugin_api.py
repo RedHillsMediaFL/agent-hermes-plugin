@@ -23,11 +23,11 @@ runtime_setup = importlib.util.module_from_spec(_runtime_spec)
 sys.modules[_runtime_name] = runtime_setup
 _runtime_spec.loader.exec_module(runtime_setup)
 
-_sharing_name = "agent_companion_ai_sharing_v1"
-_sharing_spec = importlib.util.spec_from_file_location(_sharing_name, Path(__file__).with_name("ai_sharing.py"))
-ai_sharing = importlib.util.module_from_spec(_sharing_spec)
-sys.modules[_sharing_name] = ai_sharing
-_sharing_spec.loader.exec_module(ai_sharing)
+_sharing_name = "agent_companion_sharing_policy_v1"
+_sharing_spec = importlib.util.spec_from_file_location(_sharing_name, Path(__file__).with_name("sharing_policy.py"))
+sharing_policy = importlib.util.module_from_spec(_sharing_spec)
+sys.modules[_sharing_name] = sharing_policy
+_sharing_spec.loader.exec_module(sharing_policy)
 
 router = APIRouter(tags=["Agent companion"])
 _NO_STORE = {"Cache-Control": "no-store"}
@@ -54,6 +54,22 @@ def authorize(request):
     raise HTTPException(401, "Authentication required.", headers=_NO_STORE)
 
 
+def authorize_operator(request):
+    """Policy declarations belong to the local server operator, not any signed-in user.
+
+    Hermes stamps this request-local grant only after redeeming its private,
+    same-user native HTTP ticket. Hosted IPC conveys authentication alone and
+    cannot establish operator authority; never accept a client-supplied claim.
+    """
+    authorize(request)
+    grant = getattr(request.state, "native_http_principal", None)
+    if (type(grant) is dict and grant.get("purpose") == "native-http"
+            and type(grant.get("capabilities")) is frozenset
+            and grant["capabilities"] == frozenset({"http:owner"})):
+        return
+    raise HTTPException(403, "Verified local operator authority required.", headers=_NO_STORE)
+
+
 def _unique_object(pairs):
     value = {}
     for key, item in pairs:
@@ -63,17 +79,17 @@ def _unique_object(pairs):
     return value
 
 
-async def _body(request):
+async def _body(request, maximum=state.MAX_BODY_BYTES):
     data = bytearray()
     async for chunk in request.stream():
         data.extend(chunk)
-        if len(data) > state.MAX_BODY_BYTES:
-            raise HTTPException(413, "Settings request is too large.", headers=_NO_STORE)
+        if len(data) > maximum:
+            raise HTTPException(413, "Request is too large.", headers=_NO_STORE)
     try:
         return json.loads(data, object_pairs_hook=_unique_object,
                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
     except (ValueError, UnicodeError, RecursionError):
-        raise HTTPException(400, "Invalid settings JSON.", headers=_NO_STORE) from None
+        raise HTTPException(400, "Invalid JSON request.", headers=_NO_STORE) from None
 
 
 async def _call(operation, *args):
@@ -91,66 +107,48 @@ async def _call(operation, *args):
 async def read_capabilities(request: Request, response: Response):
     authorize(request)
     response.headers.update(_NO_STORE)
-    return state.capabilities()
-
-
-_AI_OPERATIONS = frozenset({"chat", "reply", "task", "transcription", "group", "automation",
-                            "command", "response", "agent_draft", "personal_context"})
-
-
-def _recipient_disclosure(request, profile, session_id, room_id, operation):
-    profile = ai_sharing._scope(profile)
-    if session_id is not None:
-        session_id = ai_sharing._scope(session_id)
-    if room_id is not None:
-        ai_sharing._scope(room_id)
-    if operation not in _AI_OPERATIONS:
-        raise ai_sharing.InvalidDisclosure()
-    try:
-        # This is an explicit compatibility-runtime contract, not a monkeypatch
-        # or an assumption that an installed plugin enforces provider dispatch.
-        from hermes_cli.ai_sharing_policy import read_disclosure
-    except ImportError:
-        result = ai_sharing.build_disclosure({}, profile=profile, session_id=session_id)
-        result["enforced_operations"] = []
-        return result
-    result = read_disclosure(request, profile=profile, session_id=session_id,
-                             room_id=room_id, operation=operation)
-    allowed = {"schema_version", "revision", "complete", "enforced", "profile", "session_id",
-               "recipients", "unavailable_reason", "enforced_operations"}
-    if (type(result) is not dict or set(result) - allowed or result.get("schema_version") != 1
-            or result.get("profile") != profile or result.get("session_id") != session_id
-            or type(result.get("complete")) is not bool or type(result.get("enforced")) is not bool
-            or type(result.get("revision")) is not str
-            or len(result["revision"]) != 64
-            or any(c not in "0123456789abcdef" for c in result["revision"])
-            or type(result.get("enforced_operations")) is not list
-            or any(type(value) is not str for value in result["enforced_operations"])
-            or not set(result["enforced_operations"]) <= _AI_OPERATIONS
-            or len(result["enforced_operations"]) > len(_AI_OPERATIONS)
-            or len(set(result["enforced_operations"])) != len(result["enforced_operations"])
-            or type(result.get("recipients")) is not list or len(result["recipients"]) > 64):
-        raise ai_sharing.InvalidDisclosure()
-    for recipient in result["recipients"]:
-        if (type(recipient) is not dict or set(recipient) != {"id", "name", "origins", "purposes"}
-                or recipient["purposes"] != list(ai_sharing.PURPOSES)):
-            raise ai_sharing.InvalidDisclosure()
-        ai_sharing._recipient({key: recipient[key] for key in ("id", "name", "origins")})
-    if len({value["id"] for value in result["recipients"]}) != len(result["recipients"]):
-        raise ai_sharing.InvalidDisclosure()
+    result = state.capabilities()
+    result['features']['ai_sharing_metadata'] = True
     return result
+
+
+async def _policy_call(operation, *args):
+    try:
+        return await run_in_threadpool(operation, *args)
+    except sharing_policy.InvalidPolicy as exc:
+        raise HTTPException(400, str(exc), headers=_NO_STORE) from None
+    except sharing_policy.Conflict as exc:
+        raise HTTPException(409, {'code': 'ai_sharing_policy_revision_conflict', 'current': exc.current},
+                            headers=_NO_STORE) from None
+    except sharing_policy.Unavailable:
+        raise HTTPException(503, {'code': 'ai_sharing_policy_unavailable'}, headers=_NO_STORE) from None
 
 
 @router.get("/ai-sharing", operation_id="agent_companion_ai_sharing")
 async def read_ai_sharing(request: Request, response: Response, profile: str = "default",
-                          session_id: str | None = None, room_id: str | None = None,
-                          operation: str = "chat"):
+                          session_id: str | None = None):
     authorize(request)
     response.headers.update(_NO_STORE)
+    return await _policy_call(sharing_policy.disclosure, profile, session_id)
+
+
+@router.get('/ai-sharing/policy', operation_id='agent_companion_read_ai_sharing_policy')
+async def read_ai_sharing_policy(request: Request, response: Response):
+    authorize(request)
+    response.headers.update(_NO_STORE)
+    return await _policy_call(sharing_policy.read)
+
+
+@router.put('/ai-sharing/policy', operation_id='agent_companion_replace_ai_sharing_policy')
+async def write_ai_sharing_policy(request: Request, response: Response):
+    authorize_operator(request)
+    response.headers.update(_NO_STORE)
+    body = await _body(request, maximum=sharing_policy.MAX_BODY_BYTES)
     try:
-        return await run_in_threadpool(_recipient_disclosure, request, profile, session_id, room_id, operation)
-    except ai_sharing.InvalidDisclosure:
-        raise HTTPException(503, {"code": "ai_recipient_disclosure_unavailable"}, headers=_NO_STORE) from None
+        expected, policy = sharing_policy.validate_update(body)
+    except sharing_policy.InvalidPolicy as exc:
+        raise HTTPException(400, str(exc), headers=_NO_STORE) from None
+    return await _policy_call(sharing_policy.replace, expected, policy)
 
 
 @router.get("/settings", operation_id="agent_companion_settings")
