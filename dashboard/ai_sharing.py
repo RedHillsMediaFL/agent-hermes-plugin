@@ -93,6 +93,10 @@ def validate_operator_policy(value):
         for row in rows:
             _require(type(row) is dict and set(row) == {'id', 'name', 'origins', 'purposes'})
             clean = _recipient({key: row[key] for key in ('id', 'name', 'origins')})
+            try:
+                _require(len(clean['name'].encode('utf-8')) <= 160)
+            except UnicodeError:
+                raise InvalidDisclosure('Invalid AI processor name.') from None
             purposes = row['purposes']
             _require(type(purposes) is list and 1 <= len(purposes) <= len(PURPOSES) and
                      all(type(p) is str and p in PURPOSES for p in purposes) and

@@ -88,6 +88,16 @@ class OperatorMetadataTests(unittest.TestCase):
         row['purposes'] = ['manual_ai']
         self.assertEqual(metadata.validate_operator_policy(value)['profiles']['Assistant']['recipients'][0]['purposes'], ['manual_ai'])
 
+    def test_unicode_processor_names_fit_the_native_utf8_limit(self):
+        value = example(); row = value['profiles']['Assistant']['recipients'][0]
+        row['name'] = '漢' * 53
+        self.assertEqual(metadata.validate_operator_policy(value)['profiles']['Assistant']['recipients'][0]['name'], row['name'])
+        for name in ('漢' * 54, '\ud800'):
+            row['name'] = name
+            with self.subTest(byte_case='oversized' if len(name) > 1 else 'invalid_unicode'):
+                with self.assertRaises(metadata.InvalidDisclosure):
+                    metadata.validate_operator_policy(value)
+
     def test_closed_schema_and_recipient_validation(self):
         invalid = []
         value = example(); value['secret'] = 'fixture-value'; invalid.append(value)
