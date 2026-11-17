@@ -25,6 +25,8 @@ Run these in the serving profile. The app uses the same authenticated stock plug
 
 The reviewed runtime supplies both canonical session-authority and legacy-dashboard conversation adapters. Agent must select the matching protocol from authenticated capabilities and `gateway.ready`, and must never retry a canonical refusal through the legacy writer. `hermes serve --isolated` selects a dedicated profile server; the flag alone does not establish its chat protocol.
 
+When a gateway already exposes native HTTP, test and reuse that service and its origin. Use isolated `hermes serve` only for standalone installations without a serving gateway.
+
 Reuse/claim an available port before launching the server. Expose an HTTPS origin trusted by the client device, proxy WebSocket upgrades, and set the serving profile's `dashboard.public_url` to that exact HTTPS origin. A proxy on another host/container also needs its bounded address in `dashboard.trusted_proxies`. Configure the bundled basic provider and stable signing secret before unattended startup; do not expose an unauthenticated dashboard. Use the upstream authentication/proxy guide for your installation shape.
 
 ## In-app setup acceptance

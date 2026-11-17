@@ -132,7 +132,9 @@ HERMES_REPO_URL=https://github.com/RedHillsMediaFL/hermes-agent \
   --commit d2dfb3ee41abfb79d99d9a45b0559de81b78c062 --non-interactive
 ```
 
-Run this from a standard Hermes source checkout with the reviewed installer. Choose your own Hermes home and provider configuration. Managed containers, Desktop bundles and other image-managed installations must deploy the compatible release through their existing hosting mechanism. Finish or safely pause work before an administrator changes/restarts its runtime. Then start the server, connect from Agent, and let the app install this companion through Hermes' normal authenticated plugin API.
+Run this from a standard Hermes source checkout with the reviewed installer. Choose your own Hermes home and provider configuration. Managed containers, Desktop bundles and other image-managed installations must deploy the compatible release through their existing hosting mechanism. Finish or safely pause work before an administrator changes/restarts its runtime.
+
+When an existing gateway exposes native HTTP, reuse that service, its origin and its serving profile. Use `hermes serve --isolated` only for a standalone installation without a serving gateway. Connect Agent to the selected service and let the app install this companion through Hermes' normal authenticated plugin API.
 
 The companion does not replace a live checkout, restart a runtime, change model/provider defaults, spawn an updater worker or install a permanent service. Stock Hermes' generic updater pause is not a fail-closed proof that every serving process has drained, so the app does not promise automatic migration from an arbitrary running stock server.
 
