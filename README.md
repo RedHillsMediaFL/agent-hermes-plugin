@@ -9,13 +9,15 @@ The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and
 Install the reviewed release from [RedHillsMediaFL/agent-hermes-plugin](https://github.com/RedHillsMediaFL/agent-hermes-plugin). The [release page](https://github.com/RedHillsMediaFL/agent-hermes-plugin/releases/tag/v0.1.0) records its full commit for installations that require an immutable commit pin:
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref v0.1.0
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref e1a5cdc3d5226fee69c45ce6ae6838c0682d2877
 hermes plugins enable agent-companion
 hermes plugins doctor agent-companion --ci
 hermes plugins show agent-companion
 ```
 
 Run these commands in the Hermes profile that serves the connection. The normal Hermes enable/discovery lifecycle applies; this package has no custom installer or service. No new port is needed. A dashboard-only client installation must include Hermes' supported web dependencies.
+
+`--ref` requires a full commit SHA; it does not accept a tag or branch name. The pin above is the immutable source commit of the `v0.1.0` metadata preview. See [TESTING.md](TESTING.md) for the standard Hermes server setup, HTTPS/authentication requirements, and compatibility checks.
 
 For an unpinned installation, `hermes plugins update agent-companion` follows its installed source. A pinned installation remains on its selected revision; update it explicitly:
 
