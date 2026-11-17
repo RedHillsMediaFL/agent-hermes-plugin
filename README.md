@@ -11,12 +11,12 @@ The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and
 The current plugin ID is **`agent-companion-runtime`**. Install from this free, MIT-licensed repository using Hermes' normal plugin manager:
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref 4a338857de785bd160eb1ddcd02ba7694bb1d7f2
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref d6e485a6ea3ac9055fa92675b3b9c8f06dfc630d
 hermes plugins enable agent-companion-runtime
 hermes plugins doctor agent-companion-runtime --ci
 ```
 
-The example pins the reviewed v0.3.1 code using its full 40-character commit. `--ref` does not accept tags or branches. Agent's in-app installer always uses its reviewed full commit and `force:false`.
+The example pins the reviewed v0.3.2 code using its full 40-character commit. `--ref` does not accept tags or branches. Agent's in-app installer always uses its reviewed full commit and `force:false`.
 
 Run the commands in the Hermes profile serving the connection. The dashboard/plugin manager performs normal scanning, dependency admission and activation. A dashboard-only Hermes installation must include the supported web dependencies. This plugin opens no additional listening port and installs no permanent service.
 
@@ -129,7 +129,7 @@ A compatible Hermes runtime is an explicit prerequisite. Install it from the fre
 ```sh
 HERMES_REPO_URL=https://github.com/RedHillsMediaFL/hermes-agent \
   bash scripts/install.sh --branch agent-companion-v1 \
-  --commit REVIEWED_RUNTIME_COMMIT --non-interactive
+  --commit d2dfb3ee41abfb79d99d9a45b0559de81b78c062 --non-interactive
 ```
 
 Run this from a standard Hermes source checkout with the reviewed installer. Choose your own Hermes home and provider configuration. Managed containers, Desktop bundles and other image-managed installations must deploy the compatible release through their existing hosting mechanism. Finish or safely pause work before an administrator changes/restarts its runtime. Then start the server, connect from Agent, and let the app install this companion through Hermes' normal authenticated plugin API.
@@ -144,7 +144,9 @@ The app independently obtains supported native `/api/agent/v1/capabilities`, ver
 
 Core authentication, ticketed WebSockets, session history, chat execution, file upload, and supported management operations remain Hermes' responsibility. Client/server protocol compatibility must be verified independently of this plugin. The plugin does not proxy inference or infer a canonical agent conversation from a title, recent row, or message text.
 
-The capability receipt explicitly reports the following as unavailable: canonical ongoing-session resolution, durable reply linkage, groups, remote push, Live Activities, Life collection, usage uploads and account-scoped preferences. Clients must respect those values. Existing separate integrations are not silently adopted. No subscription, purchase, analytics collector, APNs key, mailbox configuration, private endpoint, or credential is included.
+The plugin's own capability receipt reports canonical ongoing-session resolution and durable reply linkage as unavailable: those operations belong to the reviewed Hermes runtime. The runtime advertises ongoing conversations, message replies and independent task threads through its separate authenticated `/api/agent/v1/capabilities` endpoint. Clients must negotiate the runtime's canonical or legacy WebSocket protocol independently; plugin presence never proves chat compatibility.
+
+The plugin also reports groups, remote push, Live Activities, Life collection, usage uploads and account-scoped preferences as unavailable. Existing separate integrations are not silently adopted. No subscription, purchase, analytics collector, APNs key, mailbox configuration, private endpoint, or credential is included.
 
 ## Development and verification
 

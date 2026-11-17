@@ -17,6 +17,8 @@ Stock v0.23.2 source includes the current client's PKCE/password native-auth end
 
 Those paths alone do not establish wire compatibility. A `gateway.ready` event with `session_authority: true` selects Hermes' canonical session authority; legacy session RPCs cannot be retried through the legacy writer when the canonical owner rejects them. The canonical create/submit/control contracts differ from older client traffic. A conforming client must negotiate and honor canonical references, revisions, execution generations, admissions, events and request semantics.
 
+Companion v0.3.2 identifies the separately reviewed native runtime at [`d2dfb3ee41abfb79d99d9a45b0559de81b78c062`](https://github.com/RedHillsMediaFL/hermes-agent/commit/d2dfb3ee41abfb79d99d9a45b0559de81b78c062). That runtime supplies canonical and legacy projections for ongoing conversations, exact message replies and independent task threads. The companion reports the source target; its metadata capability flags do not attest runtime features, and it never installs or updates the runtime itself.
+
 There is **no `hermes dashboard --standalone` option** in the reviewed v0.23.2 parser. Its `--isolated` option selects a dedicated profile server and is not evidence of a legacy protocol mode. This package therefore publishes no undocumented startup workaround. Full app compatibility requires a separate clean, synthetic authenticated sign-in/WebSocket/create/send/history acceptance run.
 
 ## Publication boundary
