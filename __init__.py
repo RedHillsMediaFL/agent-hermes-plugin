@@ -1,6 +1,6 @@
 """Agent companion: an optional dashboard API, without runtime patches or hooks."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def register(ctx):

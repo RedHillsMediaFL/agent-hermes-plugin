@@ -1,6 +1,7 @@
 """Isolated contract tests: temporary plugin data, synthetic authentication, no network."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from contextvars import ContextVar
 from copy import deepcopy
 import importlib.util
@@ -27,7 +28,7 @@ state = api.state
 
 class StorageFixture:
     def start_storage(self):
-        self.directory = tempfile.TemporaryDirectory(prefix="agent-companion-tests-")
+        self.directory = tempfile.TemporaryDirectory(prefix="agent-companion-runtime-tests-")
         self.home = ContextVar("test_profile_home", default="alpha")
         self.opens = []
 
@@ -127,12 +128,12 @@ class StorageTests(StorageFixture, unittest.TestCase):
 
     def test_corrupt_existing_data_is_not_replaced(self):
         state.read()
-        path = Path(self.directory.name) / "alpha/agent-companion/data.db"
-        with sqlite3.connect(path) as db:
+        path = Path(self.directory.name) / "alpha/agent-companion-runtime/data.db"
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute("UPDATE companion_settings SET settings_json='invalid-json'")
         with self.assertRaises(state.Unavailable):
             state.read()
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             self.assertEqual(db.execute("SELECT settings_json FROM companion_settings").fetchone()[0], "invalid-json")
 
     def test_settings_have_a_closed_shape(self):
@@ -174,9 +175,9 @@ class APITests(StorageFixture, unittest.IsolatedAsyncioTestCase):
             request.state.hosted_http_authenticated = self.admitted
             return await call_next(request)
 
-        app.include_router(api.router, prefix="/api/plugins/agent-companion")
+        app.include_router(api.router, prefix="/api/plugins/agent-companion-runtime")
         self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test.invalid")
-        self.base = "/api/plugins/agent-companion"
+        self.base = "/api/plugins/agent-companion-runtime"
 
     async def asyncTearDown(self):
         await self.client.aclose()

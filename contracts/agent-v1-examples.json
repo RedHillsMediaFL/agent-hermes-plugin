@@ -1,0 +1,164 @@
+{
+  "protocol_version": 1,
+  "timestamp_format": "Unix seconds as JSON number",
+  "capabilities": {
+    "protocol_version": 1,
+    "serving_profile": "default",
+    "installation_id": "server-installation-id",
+    "core_chat_protocol": "legacy-dashboard-v1",
+    "core_chat_compatible": true,
+    "features": {
+      "message_replies": true,
+      "task_threads": true,
+      "agent_management": true,
+      "groups": false,
+      "usage_upload": false,
+      "life_context": false,
+      "remote_push": false,
+      "live_activities": false,
+      "ongoing_conversations": true
+    }
+  },
+  "message_ref": {
+    "profile": "default",
+    "session_id": "20261116_120000_parent",
+    "row_id": 42,
+    "message_uid": "immutable-message-uid",
+    "role": "assistant",
+    "snapshot": {
+      "text": "A persisted answer.",
+      "timestamp": 1794848400.0,
+      "truncated": false
+    }
+  },
+  "resolve": {
+    "method": "GET",
+    "path": "/api/agent/v1/messages/resolve?profile=default&session_id=20261116_120000_parent&row_id=42",
+    "response": {
+      "message": "$message_ref"
+    }
+  },
+  "links": {
+    "method": "GET",
+    "path": "/api/agent/v1/sessions/20261116_120000_parent/links?profile=default",
+    "response": {
+      "links": [
+        {
+          "message_uid": "accepted-user-message-uid",
+          "operation_id": "client-uuid",
+          "reply_to": "$message_ref",
+          "row_id": 43
+        }
+      ],
+      "next_cursor": null
+    }
+  },
+  "submit": {
+    "rpc_method": "session.submit_attributed",
+    "params": {
+      "profile": "default",
+      "session_id": "runtime-id",
+      "operation_id": "client-uuid",
+      "text": "Please explain that answer.",
+      "reply_to": {
+        "session_id": "20261116_120000_parent",
+        "row_id": 42,
+        "message_uid": "immutable-message-uid"
+      },
+      "attachments": []
+    },
+    "attachment_shape": {
+      "path": "/server-managed-upload/path",
+      "kind": "image",
+      "name": "image.png",
+      "mime_type": "image/png",
+      "size": 1234
+    },
+    "response": {
+      "status": "streaming",
+      "disposition": "accepted",
+      "operation_id": "client-uuid",
+      "runtime_session_id": "runtime-id",
+      "stored_session_id": "20261116_120000_parent",
+      "user_message": "$message_ref_for_the_new_user_row",
+      "reply_to": "$message_ref",
+      "replayed": false
+    },
+    "replay": "Same persisted user_message/reply_to/operation_id after restart; replayed true, disposition already_accepted, status accepted. No automatic inference rerun is promised.",
+    "busy_error": {
+      "code": 4091,
+      "message": "This conversation is busy. Keep your draft and try again when it finishes.",
+      "data": {
+        "code": "session_busy",
+        "retryable": true,
+        "accepted": false
+      }
+    }
+  },
+  "thread": {
+    "thread_id": "20261116_120001_child",
+    "profile": "default",
+    "title": "A separate task",
+    "parent_session_id": "20261116_120000_parent",
+    "origin": "$message_ref",
+    "created_at": 1794848401.0
+  },
+  "task_create": {
+    "rpc_method": "session.task_create",
+    "params": {
+      "profile": "default",
+      "operation_id": "client-uuid",
+      "origin": {
+        "session_id": "20261116_120000_parent",
+        "row_id": 42,
+        "message_uid": "immutable-message-uid"
+      },
+      "title": "A separate task",
+      "source": "desktop"
+    },
+    "response": {
+      "thread": "$thread",
+      "session": "$ordinary_legacy_LiveSession_snapshot",
+      "replayed": false
+    }
+  },
+  "thread_list": {
+    "method": "GET",
+    "path": "/api/agent/v1/threads?profile=default&origin_session_id=20261116_120000_parent",
+    "response": {
+      "threads": [
+        "$thread"
+      ],
+      "next_cursor": null
+    }
+  },
+  "thread_detail": {
+    "method": "GET",
+    "path": "/api/agent/v1/threads/20261116_120001_child?profile=default",
+    "response": {
+      "thread": "$thread"
+    }
+  },
+  "errors": {
+    "missing_source": "source_message_not_found",
+    "uid_row_mismatch": "source_message_mismatch",
+    "wrong_owner": "permission_denied",
+    "wrong_profile": "profile_mismatch",
+    "changed_operation_payload": "operation_conflict",
+    "busy": "session_busy"
+  },
+  "ownership": "Profile and principal are derived from verified server request/socket context, never client identity fields; supplied row/UID must match stored source exactly. Snapshots are server generated. v1 excludes queued/steered admissions.",
+  "ongoing_open": {
+    "rpc_method": "session.ongoing_open",
+    "params": {
+      "profile": "default",
+      "source": "desktop"
+    },
+    "response": {
+      "profile": "default",
+      "stored_session_id": "explicit-ongoing-root",
+      "session": "$ordinary_legacy_LiveSession_snapshot",
+      "created": true
+    }
+  }
+}

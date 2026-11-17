@@ -9,8 +9,8 @@ import re
 import sqlite3
 import uuid
 
-PLUGIN_ID = "agent-companion"
-VERSION = "0.1.0"
+PLUGIN_ID = "agent-companion-runtime"
+VERSION = "0.2.0"
 SCHEMA_VERSION = 1
 MAX_BODY_BYTES = 16_384
 MAX_REVISION = 2**53 - 1
@@ -97,6 +97,8 @@ def capabilities():
         "settings_scope": "hermes_profile",
         "core_chat_requires_plugin": False,
         "features": {
+            "runtime_setup": True,
+            "automatic_runtime_update": False,
             "connection_metadata": True,
             "profile_roles": True,
             "ui_preferences": True,

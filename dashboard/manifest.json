@@ -1,9 +1,9 @@
 {
-  "name": "agent-companion",
+  "name": "agent-companion-runtime",
   "label": "Agent Companion",
   "description": "Connection metadata and explicit profile roles for Agent.",
   "icon": "MessageSquare",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "tab": {"hidden": true},
   "api": "plugin_api.py"
 }

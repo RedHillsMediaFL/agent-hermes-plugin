@@ -1,57 +1,44 @@
 # Testing the Agent companion
 
-`v0.1.0` is an optional metadata preview. It adds connection labels, explicit profile roles, and interface preferences. Chat, authentication, models, and history remain Hermes features. Installing this plugin does not establish compatibility with every Hermes server or Agent build.
+The current plugin ID is `agent-companion-runtime`. The optional v0.1.0 metadata preview retains the separate `agent-companion` ID and its original source/tag/store. Install the new plugin beside the preview; no forced replacement or removal is required.
 
-## Install an immutable revision
+## Exact source boundaries
 
-Use a normal Hermes installation with its supported web dependencies and a configured model provider. The verified stock baseline is **Hermes v0.23.2** (`ae2a81ccc00e9b7c06301523e5bb09608397149c`); later versions require their own acceptance checks. Run commands in the profile that will serve the connection:
+- Stock baseline: Hermes v0.23.2, `ae2a81ccc00e9b7c06301523e5bb09608397149c`.
+- Reviewed native runtime: `RedHillsMediaFL/hermes-agent`, branch `agent-companion-v1`, full commit `fcd35b8307e5b18c7a61d33b43123395b408183a`.
+- Legacy metadata preview: v0.1.0, `e1a5cdc3d5226fee69c45ce6ae6838c0682d2877`.
+- The current companion's immutable release commit is recorded by its release and by Agent's installer. Hermes requires the full 40-character SHA for `--ref`; tags and branches are not accepted.
 
-```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref e1a5cdc3d5226fee69c45ce6ae6838c0682d2877
-hermes plugins enable agent-companion
-hermes plugins doctor agent-companion --ci
-hermes plugins show agent-companion
-```
+Use a standard Hermes installation with supported web dependencies. Agent supports Hermes' `basic` username/password authentication with `native_pkce`; it does not implement browser OAuth-only sign-in. A stock server may accept authentication yet use a different chat protocol. Only the native compatibility endpoint and a verified WebSocket handshake establish app compatibility.
 
-This full SHA is the source commit of `v0.1.0`. Hermes requires a 40-character commit SHA for `--ref`; tag and branch names are rejected. Pinned installations stay pinned. To update, replace `REVIEWED_FULL_COMMIT_SHA` below with the reviewed release's full commit:
+## Install through Hermes
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --force --ref REVIEWED_FULL_COMMIT_SHA
-hermes plugins doctor agent-companion --ci
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref REVIEWED_FULL_COMPANION_COMMIT_SHA
+hermes plugins enable agent-companion-runtime
+hermes plugins doctor agent-companion-runtime --ci
+hermes plugins show agent-companion-runtime
 ```
 
-## Run a compatible authenticated server
+Run these in the serving profile. The app uses the same authenticated stock plugin manager, an immutable reviewed ref and `force:false`. Keep any v0.1 preview installed during migration and verify its source edits and settings database remain unchanged.
 
-The current Agent client supports the legacy dashboard chat protocol and the `basic` username/password provider. Its native PKCE flow posts to `/auth/password-login`; it has no browser OAuth/OIDC sign-in flow. The supported setup is a private LAN/VPN connection over HTTPS. Public OAuth-only servers are not supported by this client, although Hermes itself supports them.
+This Agent release uses the supported isolated dashboard protocol: `hermes serve --isolated --host 127.0.0.1 --port PORT`. Attached canonical session-authority mode is a different protocol and remains unsupported. Reuse/claim an available port before launching the server. Expose an HTTPS origin trusted by the client device, proxy WebSocket upgrades, and set the serving profile's `dashboard.public_url` to that exact HTTPS origin. A proxy on another host/container also needs its bounded address in `dashboard.trusted_proxies`. Configure the bundled basic provider and stable signing secret before unattended startup; do not expose an unauthenticated dashboard. Use the upstream authentication/proxy guide for your installation shape.
 
-For an iPhone or remote Mac, configure an HTTPS URL reachable only through your trusted LAN/VPN, with a certificate trusted by that device. Set TLS termination to proxy to the loopback backend, including WebSocket upgrades, and merge the exact external origin into the serving profile's `config.yaml`:
+## In-app setup acceptance
 
-```yaml
-dashboard:
-  public_url: "https://hermes.example.com"
-```
+1. Start a fresh stock source installation with its own temporary Hermes home and synthetic or dedicated test credentials. Do not copy a personal Hermes account, provider configuration or conversations into a test installation.
+2. Verify public `/api/status` advertises `auth_required: true`, `basic` and `native_pkce`. Sign in from Agent and confirm explicit message/file sharing consent is required.
+3. Install the new runtime companion from the setup screen. Verify the normal manager's code scan, dependency admission and activation; the new namespace must become live even if the old metadata API remains loaded.
+4. Read authenticated `/api/plugins/agent-companion-runtime/setup/runtime`. Confirm the fixed repository, branch and full runtime commit. It must report `automatic_update:false`, `can_update:false`, and explicit initial-install/restart or managed-host requirements. Dirty and pending Git-operation checkouts must remain untouched.
+5. Submit the closed setup intent twice and verify both requests refuse with HTTP 409. Attempt an arbitrary source/ref/command and verify HTTP 400 without echoing it. No source files, job store, installer child, model/provider default or live process may change.
+6. Use the standard supported initial compatible-Hermes installer or your existing image/hosting mechanism, at a safely controlled administrator-selected time. Preserve original account/configuration/provider selections and source work. The companion must not claim to perform this operation automatically.
+7. After startup require supported `/api/agent/v1/capabilities`, a read-only ticketed WebSocket handshake/ping, and a second matching installation/profile identity read. Installer success or plugin presence alone must leave Connect unavailable.
+8. Send a harmless test message, reply to a specific message, create a task thread, reopen both histories, and verify linkage survives app and controlled backend restart. Keep each agent's ongoing conversation separate from topic chats and verify two profiles cannot adopt each other's message/thread references.
 
-Replace the example hostname with your own. Forward the original host and HTTPS scheme. A proxy on another host/container needs its exact address or a bounded proxy network in `dashboard.trusted_proxies`. The public URL engages Hermes' authentication gate even when the backend binds to loopback.
-
-Configure Hermes' bundled `basic` provider before unattended startup. The first interactive launch offers username/password setup when the gate engages and no provider exists. Keep this password-based dashboard private to the LAN/VPN; it is not a public-internet deployment recipe. Start stock Hermes' dedicated server using its supported `--isolated` flag:
-
-```sh
-hermes dashboard --isolated --host 127.0.0.1 --port 9119 --no-open
-```
-
-For a headless backend, use `hermes serve --isolated --host 127.0.0.1 --port 9119`. Choose an available port if 9119 is occupied. Both commands use Hermes' standard server implementation; `--isolated` controls routing, not data-store or tenant isolation. Restart after configuration changes. See the [upstream authentication and proxy guide](https://github.com/NousResearch/hermes-agent/blob/v0.23.2/website/docs/user-guide/features/web-dashboard.md#authentication-gated-mode) for details.
-
-## Check the installation
-
-1. Open `https://hermes.example.com/api/status` through the private LAN/VPN. Confirm `auth_required: true`, `basic` in `auth_providers`, and `native_pkce` in `auth_flows`.
-2. Sign in through Agent using that HTTPS URL and the configured username/password. Create a topic chat, attach a small test file, and send a harmless prompt. Confirm streaming and a completed reply, reopen the chat, then verify both sides of the conversation survive an app restart and a controlled backend restart.
-3. Keep ongoing agent conversations separate from topic chats. A fresh profile can have no ongoing conversation; the newest topic must not silently become one.
-4. In an authenticated dashboard browser session, read `/api/plugins/agent-companion/capabilities` and `/api/plugins/agent-companion/settings`. Expect plugin version `0.1.0`, `settings_scope: hermes_profile`, and only the advertised metadata features enabled. See [README.md](README.md#api) for revision-checked settings updates.
-
-A server advertising `gateway.ready.payload.session_authority: true` uses a different canonical chat protocol. The current Agent client rejects it before sending legacy chat calls. The companion cannot translate that protocol. Groups, remote push, Live Activities, Life, usage uploads, durable reply linkage, and plugin-provided ongoing-session resolution remain unavailable in this preview.
+Managed containers and Desktop installations must use their existing hosting mechanism to deploy the reviewed runtime; the companion must report that state without mutating an image. The publisher's reviewer container/proxy is separate test infrastructure and is not needed for normal self-hosted installs.
 
 ## Verification status
 
-The package passed 18 isolated unit tests and all 15 stock v0.23.2 plugin-validator checks. No-port tests against unchanged stock Hermes also passed synthetic password/PKCE sign-in, bearer authentication, ticketed legacy WebSockets, session creation, file attachment, streamed events, live history, durable user history, resume, and revision/generation-fenced rename, pin, and delete operations with stale-request and receipt-replay checks.
+The current package has isolated settings and setup contract tests using temporary state, synthetic authentication and in-memory ASGI requests. They make no model calls, open no listening ports and use no production Hermes home. The stock source also has targeted preservation checks proving local user files survive normal plugin updates and edited tracked files receive backups.
 
-Those tests used a synthetic identity provider and Hermes' stock synthetic-turn seam. They made no live model calls and do not establish durable assistant history after a backend restart, public HTTPS deployment acceptance, or complete Agent release acceptance. Complete the checks above with the exact Hermes version, Agent build, and provider you intend to support. Report those versions and redacted errors; omit credentials, tokens, and private conversations.
+These passing contract checks are not live installation or restart acceptance. Before releasing, complete the exact-source lifecycle checks above and record source commits, artifact/build identity, public HTTPS/auth/native HTTP/WebSocket evidence and actual source/state preservation. Include redacted error codes; exclude passwords, keys, tokens and private conversations.

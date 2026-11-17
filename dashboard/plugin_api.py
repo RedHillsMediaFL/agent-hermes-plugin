@@ -4,17 +4,24 @@ import importlib.util
 import json
 import math
 from pathlib import Path
+import sqlite3
 import sys
 import time
 
 from fastapi import APIRouter, HTTPException, Request, Query, Response
 from starlette.concurrency import run_in_threadpool
 
-_name = "agent_companion_state_v1"
+_name = "agent_companion_runtime_state_v1"
 _spec = importlib.util.spec_from_file_location(_name, Path(__file__).with_name("state.py"))
 state = importlib.util.module_from_spec(_spec)
 sys.modules[_name] = state
 _spec.loader.exec_module(state)
+
+_runtime_name = "agent_companion_runtime_setup_v1"
+_runtime_spec = importlib.util.spec_from_file_location(_runtime_name, Path(__file__).with_name("setup_runtime.py"))
+runtime_setup = importlib.util.module_from_spec(_runtime_spec)
+sys.modules[_runtime_name] = runtime_setup
+_runtime_spec.loader.exec_module(runtime_setup)
 
 router = APIRouter(tags=["Agent companion"])
 _NO_STORE = {"Cache-Control": "no-store"}
@@ -106,3 +113,28 @@ async def clear_settings(request: Request, response: Response,
     authorize(request)
     response.headers.update(_NO_STORE)
     return await _call(state.reset, expected_revision)
+
+
+async def _runtime_call(operation, *args):
+    try:
+        return await run_in_threadpool(operation, *args)
+    except runtime_setup.SetupError as exc:
+        status = 400 if exc.code == "invalid_setup_request" else 409
+        raise HTTPException(status, {"code": exc.code}, headers=_NO_STORE) from None
+    except (OSError, ValueError, sqlite3.Error):
+        raise HTTPException(503, {"code": "setup_storage_unavailable"}, headers=_NO_STORE) from None
+
+
+@router.get("/setup/runtime", operation_id="agent_companion_runtime_setup_status")
+async def runtime_setup_status(request: Request, response: Response):
+    authorize(request)
+    response.headers.update(_NO_STORE)
+    return await _runtime_call(runtime_setup.status)
+
+
+@router.post("/setup/runtime", operation_id="agent_companion_runtime_setup_start")
+async def runtime_setup_start(request: Request, response: Response):
+    authorize(request)
+    response.headers.update(_NO_STORE)
+    body = await _body(request)
+    return await _runtime_call(runtime_setup.queue, body)
