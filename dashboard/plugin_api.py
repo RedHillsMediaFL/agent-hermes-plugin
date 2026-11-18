@@ -62,12 +62,43 @@ def authorize_operator(request):
     cannot establish operator authority; never accept a client-supplied claim.
     """
     authorize(request)
-    grant = getattr(request.state, "native_http_principal", None)
-    if (type(grant) is dict and grant.get("purpose") == "native-http"
-            and type(grant.get("capabilities")) is frozenset
-            and grant["capabilities"] == frozenset({"http:owner"})):
+    if _local_operator(request):
         return
     raise HTTPException(403, "Verified local operator authority required.", headers=_NO_STORE)
+
+
+def _local_operator(request):
+    grant = getattr(request.state, 'native_http_principal', None)
+    return (type(grant) is dict and grant.get('purpose') == 'native-http'
+            and type(grant.get('capabilities')) is frozenset
+            and grant['capabilities'] == frozenset({'http:owner'}))
+
+
+def _profile_operator(request, profile, capability):
+    # A published core helper validates the authenticated account, installation,
+    # exact profile, expiry and persisted revocation state. The companion never
+    # reads or treats a client header/body as an operator claim.
+    try:
+        from hermes_cli.plugins import operator_authorization
+    except ImportError:
+        return False
+    return operator_authorization(request, profile=profile, capability=capability) is not None
+
+
+def _profile_scope(request, profile):
+    try:
+        sharing_policy.profile_name(profile)
+    except sharing_policy.InvalidPolicy as exc:
+        raise HTTPException(400, str(exc), headers=_NO_STORE) from None
+    if request.query_params.getlist('profile') != [profile]:
+        raise HTTPException(400, {'code': 'profile_scope_mismatch'}, headers=_NO_STORE)
+
+
+def authorize_profile_operator(request, profile):
+    authorize(request)
+    _profile_scope(request, profile)
+    if not _profile_operator(request, profile, 'recipient-policy:write'):
+        raise HTTPException(403, {'code': 'operator_authority_required'}, headers=_NO_STORE)
 
 
 def _unique_object(pairs):
@@ -137,6 +168,37 @@ async def read_ai_sharing_policy(request: Request, response: Response):
     authorize(request)
     response.headers.update(_NO_STORE)
     return await _policy_call(sharing_policy.read)
+
+
+@router.get('/ai-sharing/setup', operation_id='agent_companion_profile_sharing_setup')
+async def read_profile_sharing_setup(request: Request, response: Response, profile: str):
+    authorize(request)
+    response.headers.update(_NO_STORE)
+    _profile_scope(request, profile)
+    result = await _policy_call(sharing_policy.profile_setup, profile)
+    result['can_edit'] = _profile_operator(request, profile, 'recipient-policy:write')
+    return result
+
+
+def _replace_profile_for_request(request, profile, expected, entry):
+    # Revalidate after body parsing and thread-pool scheduling, immediately before
+    # the scoped storage operation. An earlier pairing/setup receipt is not a lease.
+    authorize_profile_operator(request, profile)
+    return sharing_policy.replace_profile(expected, profile, entry)
+
+
+@router.put('/ai-sharing/policy/profiles/{profile}', operation_id='agent_companion_replace_profile_sharing')
+async def write_profile_sharing_policy(profile: str, request: Request, response: Response):
+    authorize_profile_operator(request, profile)
+    response.headers.update(_NO_STORE)
+    body = await _body(request, maximum=sharing_policy.MAX_BODY_BYTES)
+    try:
+        expected, entry = sharing_policy.validate_profile_update(profile, body)
+    except sharing_policy.InvalidPolicy as exc:
+        raise HTTPException(400, str(exc), headers=_NO_STORE) from None
+    result = await _policy_call(_replace_profile_for_request, request, profile, expected, entry)
+    result['can_edit'] = _profile_operator(request, profile, 'recipient-policy:write')
+    return result
 
 
 @router.put('/ai-sharing/policy', operation_id='agent_companion_replace_ai_sharing_policy')

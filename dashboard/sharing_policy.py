@@ -1,8 +1,9 @@
 """Operator-declared AI processor metadata in supported, profile-scoped plugin SQLite.
 
 No runtime configuration, credentials, sessions or native policy hooks are imported.
-Reads are shared by authenticated users of the effective Hermes profile; HTTP
-writes additionally require Hermes' verified local operator grant.
+Reads are shared by authenticated users of the effective Hermes profile. The
+transport restricts whole-policy writes to the local operator and scoped writes
+to a verified local operator or exact-profile recipient-policy delegation.
 """
 from contextlib import closing
 import importlib.util
@@ -54,6 +55,21 @@ def validate_update(value):
     if type(value) is not dict or set(value) != {'expected_revision', 'policy'}:
         raise InvalidPolicy('Invalid AI sharing policy fields.')
     return revision(value['expected_revision']), validate(value['policy'])
+
+
+def profile_name(value):
+    try:
+        return metadata.operator_profile(value)
+    except metadata.InvalidDisclosure:
+        raise InvalidPolicy('Invalid AI sharing metadata scope.') from None
+
+
+def validate_profile_update(profile, value):
+    profile_name(profile)
+    if type(value) is not dict or set(value) != {'expected_revision', 'entry'}:
+        raise InvalidPolicy('Invalid AI sharing profile fields.')
+    clean = validate({'schema_version': 1, 'profiles': {profile: value['entry']}})
+    return revision(value['expected_revision']), clean['profiles'][profile]
 
 
 def _unique_object(pairs):
@@ -125,6 +141,60 @@ def replace(expected_revision, policy):
             db.execute('UPDATE companion_ai_sharing_policy SET revision=?,policy_json=? WHERE singleton=1',
                        (current['policy_revision'] + 1, json.dumps(clean, ensure_ascii=False, separators=(',', ':'))))
             return {'schema_version': 1, 'policy_revision': current['policy_revision'] + 1, 'policy': clean}
+    except (ImportError, OSError, sqlite3.Error):
+        raise Unavailable('AI sharing policy storage is unavailable.') from None
+
+
+def _profile_receipt(current, profile):
+    entry = current['policy']['profiles'].get(profile)
+    declaration = metadata.build_operator_disclosure(current['policy'], profile=profile)
+    ready = declaration['complete'] and any(
+        'manual_ai' in recipient['purposes'] for recipient in declaration['recipients'])
+    result = {'schema_version': 1, 'profile': profile,
+              'policy_revision': current['policy_revision'],
+              'configured': entry is not None, 'ready': bool(ready),
+              'entry': entry if entry is not None else {
+                  'complete': False, 'opaque': False, 'recipients': []},
+              'declaration': declaration}
+    if not ready:
+        result['unavailable_reason'] = declaration.get(
+            'unavailable_reason', 'This profile has not declared recipients for user-requested AI work.')
+    return result
+
+
+def profile_setup(profile):
+    profile_name(profile)
+    return _profile_receipt(read(), profile)
+
+
+def replace_profile(expected_revision, profile, entry):
+    """Atomically edit one exact profile and never expose another profile's policy.
+
+    Transport authority is checked before this operation. The shared policy revision
+    still fences concurrent edits, including edits to a different profile.
+    """
+    expected_revision, clean_entry = validate_profile_update(
+        profile, {'expected_revision': expected_revision, 'entry': entry})
+    try:
+        with closing(_database()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            current = _read_locked(db)
+            if current['policy_revision'] != expected_revision:
+                db.commit()
+                raise Conflict(_profile_receipt(current, profile))
+            if current['policy']['profiles'].get(profile) == clean_entry:
+                return _profile_receipt(current, profile)
+            if current['policy_revision'] == MAX_REVISION:
+                raise Unavailable('AI sharing policy storage is unavailable.')
+            # Validate the entire merged document before writing, including global
+            # profile, recipient, origin and encoded-byte limits.
+            merged = validate({'schema_version': 1, 'profiles': {
+                **current['policy']['profiles'], profile: clean_entry}})
+            next_revision = current['policy_revision'] + 1
+            db.execute('UPDATE companion_ai_sharing_policy SET revision=?,policy_json=? WHERE singleton=1',
+                       (next_revision, json.dumps(merged, ensure_ascii=False, separators=(',', ':'))))
+            return _profile_receipt({'schema_version': 1, 'policy_revision': next_revision,
+                                     'policy': merged}, profile)
     except (ImportError, OSError, sqlite3.Error):
         raise Unavailable('AI sharing policy storage is unavailable.') from None
 

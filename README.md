@@ -122,6 +122,63 @@ The policy lives in `companion_ai_sharing_policy`, a separate table in the plugi
 
 The native client obtains explicit permission, preserves drafts when permission is absent, and refreshes this metadata before transfers. Its normal HTTP and RPC messages retain their existing formats. Downstream routing remains the server operator's responsibility and can change after a client preflight. This metadata service makes no atomic runtime-enforcement claim and never changes providers, credentials, defaults, or running jobs.
 
+### In-app operator setup (source candidate)
+
+The app can read `GET /ai-sharing/setup?profile=EXACT` before offering to send. The
+receipt contains the exact profile, shared `policy_revision`, `entry`, existing
+`declaration`, `configured`, `ready`, and `can_edit`. A profile is ready only when
+it has a complete, non-opaque declaration with named `manual_ai` recipients.
+Missing, opaque, empty and automatic-context-only declarations remain unready.
+Readiness is separate from the person's consent to share data.
+
+Initial ownership establishment uses Hermes's native operator pairing. The app
+requests exact profiles using S256 PKCE; the local server operator approves that
+request through Hermes's normal owner mechanism. The app then redeems the request
+for an expiring, revocable recipient-policy grant. Ordinary sign-in alone does
+not permit policy editing. The grant is restricted to the installation, account,
+registered app instance and approved profiles; it does not grant general local
+owner authority.
+
+Once paired, the app sends the opaque grant through `X-Hermes-Operator-Grant` on
+the appropriate same-server routes. The companion does not interpret that header.
+Hermes's supported `hermes_cli.plugins.operator_authorization` helper validates
+the request-local authority, including current expiry and revocation. A runtime
+without this helper cannot admit a delegated write.
+
+`PUT /ai-sharing/policy/profiles/{profile}?profile=EXACT` requires the path and
+single query profile to match, and accepts only:
+
+```json
+{
+  "expected_revision": 0,
+  "entry": {
+    "complete": true,
+    "opaque": false,
+    "recipients": [
+      {
+        "id": "example-hosting",
+        "name": "Example Hosting LLC",
+        "origins": ["https://ai.example.com"],
+        "purposes": ["manual_ai"]
+      }
+    ]
+  }
+}
+```
+
+The scoped operation merges one exact profile in the existing SQLite transaction
+and preserves every other profile. The shared revision prevents concurrent edits
+from overwriting one another. A stale write returns HTTP 409 with only the
+requested profile's current setup receipt. Reload before saving again. Invalid
+or revoked authority is checked before parsing the body and again immediately
+before the storage operation. Authority-storage failure returns HTTP 503.
+
+The existing whole-policy `PUT /ai-sharing/policy` and local CLI retain their
+local-owner boundary. A paired profile grant cannot replace the whole policy.
+Neither operation grants the app's separate manual or automatic-context sharing
+permission. Keep an unresolved provider opaque until its actual downstream
+processors have been identified.
+
 ## Initial compatible Hermes installation
 
 A compatible Hermes runtime is an explicit prerequisite. Install it from the free public [RedHillsMediaFL/hermes-agent](https://github.com/RedHillsMediaFL/hermes-agent/tree/agent-companion-v1) source using Hermes' supported installer and the exact reviewed commit in `dashboard/runtime_target.json`. The source-install contract is `HERMES_REPO_URL` plus `--branch`, full `--commit` and `--non-interactive`:
