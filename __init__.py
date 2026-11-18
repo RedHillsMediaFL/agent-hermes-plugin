@@ -3,7 +3,7 @@
 import importlib.util
 from pathlib import Path
 
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 
 def register(ctx):

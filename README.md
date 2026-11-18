@@ -188,7 +188,7 @@ A compatible Hermes runtime is an explicit prerequisite. Install it from the fre
 ```sh
 HERMES_REPO_URL=https://github.com/RedHillsMediaFL/hermes-agent \
   bash scripts/install.sh --branch agent-companion-v1 \
-  --commit 01ce9a679dbd39dae0479e9eac2c1e64276ea85b --non-interactive
+  --commit 31c64dc9723d52c14d2f91d2ad31e1b0ab5885b2 --non-interactive
 ```
 
 Run this from a standard Hermes source checkout with the reviewed installer. Choose your own Hermes home and provider configuration. Managed containers, Desktop bundles and other image-managed installations must deploy the compatible release through their existing hosting mechanism. Finish or safely pause work before an administrator changes/restarts its runtime.
