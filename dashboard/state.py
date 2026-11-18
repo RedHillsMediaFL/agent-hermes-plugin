@@ -10,7 +10,7 @@ import sqlite3
 import uuid
 
 PLUGIN_ID = "agent-companion-runtime"
-VERSION = "0.3.5"
+VERSION = "0.3.6"
 SCHEMA_VERSION = 1
 MAX_BODY_BYTES = 16_384
 MAX_REVISION = 2**53 - 1
