@@ -140,6 +140,7 @@ async def read_capabilities(request: Request, response: Response):
     response.headers.update(_NO_STORE)
     result = state.capabilities()
     result['features']['ai_sharing_metadata'] = True
+    result['features']['ai_sharing_profile_setup'] = True
     return result
 
 

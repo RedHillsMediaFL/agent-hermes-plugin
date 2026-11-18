@@ -50,6 +50,8 @@ The dashboard mounts all routes beneath **`/api/plugins/agent-companion-runtime`
 | GET | `/ai-sharing?profile=NAME&session_id=ID` | Current operator-declared AI recipients for the exact profile; `session_id` is optional echoed client scope. |
 | GET | `/ai-sharing/policy` | Current operator policy and its revision; first access creates an empty, incomplete policy. |
 | PUT | `/ai-sharing/policy` | Replace the policy with an exact `expected_revision`; requires Hermes' verified local owner admission. |
+| GET | `/ai-sharing/setup?profile=NAME` | Per-agent declaration readiness and current scoped operator editing permission. |
+| PUT | `/ai-sharing/policy/profiles/NAME?profile=NAME` | Compare-and-swap one profile using local or paired recipient-policy authority; preserves other profiles. |
 
 Settings are scoped to the **effective Hermes profile**, shared by authenticated dashboard operators of that installation. This is not a multi-tenant account-preference service. Neither a display label nor a profile identifier grants authority or proves that a profile exists. The client must reconcile role metadata with Hermes' actual roster and handle stale/deleted identifiers.
 
@@ -122,7 +124,7 @@ The policy lives in `companion_ai_sharing_policy`, a separate table in the plugi
 
 The native client obtains explicit permission, preserves drafts when permission is absent, and refreshes this metadata before transfers. Its normal HTTP and RPC messages retain their existing formats. Downstream routing remains the server operator's responsibility and can change after a client preflight. This metadata service makes no atomic runtime-enforcement claim and never changes providers, credentials, defaults, or running jobs.
 
-### In-app operator setup (source candidate)
+### In-app operator setup
 
 The app can read `GET /ai-sharing/setup?profile=EXACT` before offering to send. The
 receipt contains the exact profile, shared `policy_revision`, `entry`, existing
