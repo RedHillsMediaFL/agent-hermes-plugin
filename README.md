@@ -11,12 +11,12 @@ The plugin requires **Hermes v0.23.2 or later**. It supports both in-process and
 The current plugin ID is **`agent-companion-runtime`**. Install from this free, MIT-licensed repository using Hermes' normal plugin manager:
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref 9eebf2c4dff159b407080069f3da180b8f35145c
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref 2b98c8a4247c6ddf55b019a62cc47ccd5a85b630
 hermes plugins enable agent-companion-runtime
 hermes plugins doctor agent-companion-runtime --ci
 ```
 
-The example pins the reviewed v0.3.5 code using its full 40-character commit. `--ref` does not accept tags or branches. Agent's in-app installer always uses its reviewed full commit and `force:false`.
+The example pins the reviewed v0.3.6 code using its full 40-character commit. `--ref` does not accept tags or branches. Agent's in-app installer always uses its reviewed full commit and `force:false`.
 
 Run the commands in the Hermes profile serving the connection. The dashboard/plugin manager performs normal scanning, dependency admission and activation. A dashboard-only Hermes installation must include the supported web dependencies. This plugin opens no additional listening port and installs no permanent service.
 
