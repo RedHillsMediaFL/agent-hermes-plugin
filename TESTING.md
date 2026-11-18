@@ -5,8 +5,8 @@ The current plugin ID is `agent-companion-runtime`. The optional v0.1.0 metadata
 ## Exact source boundaries
 
 - Stock baseline: Hermes v0.23.2, `ae2a81ccc00e9b7c06301523e5bb09608397149c`.
-- Reviewed native runtime: `RedHillsMediaFL/hermes-agent`, branch `agent-companion-v1`, full commit `e5f1330a3a3f19445ed9784b0330aeb9e003893e`.
-- Companion v0.3.6: full commit `2b98c8a4247c6ddf55b019a62cc47ccd5a85b630`.
+- Reviewed native runtime: `RedHillsMediaFL/hermes-agent`, branch `agent-companion-v1`, full commit `c2112991ba4195e0bea9abfeaa57f9f20eb0d1f8`.
+- Companion v0.3.7: full commit `26a411ffe3ed4f577a8f9de48d60c3a7c8409822`.
 - Legacy metadata preview: v0.1.0, `e1a5cdc3d5226fee69c45ce6ae6838c0682d2877`.
 - Hermes requires the full 40-character SHA for `--ref`; tags and branches are not accepted.
 
@@ -15,7 +15,7 @@ Use a standard Hermes installation with supported web dependencies. Agent suppor
 ## Install through Hermes
 
 ```sh
-hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref 2b98c8a4247c6ddf55b019a62cc47ccd5a85b630
+hermes plugins install RedHillsMediaFL/agent-hermes-plugin --ref 26a411ffe3ed4f577a8f9de48d60c3a7c8409822
 hermes plugins enable agent-companion-runtime
 hermes plugins doctor agent-companion-runtime --ci
 hermes plugins show agent-companion-runtime
