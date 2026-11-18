@@ -2,6 +2,6 @@
   "id": "agent-native-v1",
   "repository": "https://github.com/RedHillsMediaFL/hermes-agent",
   "branch": "agent-companion-v1",
-  "revision": "71f1a3e88657f08e0e9cbf419823a223d9e3335c",
+  "revision": "01ce9a679dbd39dae0479e9eac2c1e64276ea85b",
   "reviewed_upstream_version": "0.23.2"
 }
